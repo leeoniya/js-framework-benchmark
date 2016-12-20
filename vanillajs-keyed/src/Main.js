@@ -2,10 +2,14 @@
 
 var startTime;
 var lastMeasure;
+var instr = new DOMInstr(true);
+
 var startMeasure = function(name) {
+    instr.start();
     startTime = performance.now();
     lastMeasure = name;
 }
+
 var stopMeasure = function() {
     var last = lastMeasure;
     if (lastMeasure) {
@@ -14,6 +18,7 @@ var stopMeasure = function() {
             var stop = performance.now();
             var duration = 0;
             console.log(last+" took "+(stop-startTime));
+            console.log(instr.end());
         }, 0);
     }
 }
@@ -315,8 +320,8 @@ class Main {
         startMeasure("swapRows");
         if (this.data.length>10) {
             this.store.swapRows();
-            this.data[4] = this.store.data[4]; 
-            this.data[9] = this.store.data[9]; 
+            this.data[4] = this.store.data[4];
+            this.data[9] = this.store.data[9];
 
             this.tbody.insertBefore(this.rows[9], this.rows[5])
             this.tbody.insertBefore(this.rows[4], this.rows[10])
