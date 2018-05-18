@@ -8,117 +8,100 @@ import {
 	lazyList
 } from '../node_modules/domvm/dist/nano/domvm.nano.es.js';
 
-const h = (tag, arg1, arg2) => defineElement(tag, arg1, arg2, FIXED_BODY);
-const v = defineView;
+import { Store } from './store.es6';
 
-import {Store} from './store.es6';
+// el for static dom structures
+const el = (tag, arg1, arg2) => defineElement(tag, arg1, arg2, FIXED_BODY);
 
 const store = new Store();
 
-createView(App).mount(document.body);
+// for hygenic event handlers
+store.exec   = name => store[name]();
+store.select = store.select.bind(store);
+store.delete = store.delete.bind(store);
 
-function App(vm) {
+createView(AppView, store).mount(document.body);
+
+function AppView(vm, store) {
+	// auto-redraw
+	vm.config({
+		onevent: function() {
+			vm.redraw();
+			return false;
+		}
+	});
+
 	return _ =>
-		h("#main", [
-			h(".container", [
-				v(Jumbotron),
-				v(Table),
-				h("span.preloadicon.glyphicon.glyphicon-remove", {"aria-hidden": ""})
+		el("#main", [
+			el(".container", [
+				JumbotronTpl(store),
+				TableTpl(store),
+				el("span.preloadicon.glyphicon.glyphicon-remove", {"aria-hidden": ""})
 			])
 		]);
 }
 
-function Jumbotron(vm) {
-	vm.config({diff: _ => 0});
-
-	let exec = name => e => {
-		store[name]();
-		vm.root().redraw();
-	};
-
-	let run			= exec("run");
-	let runLots		= exec("runLots");
-	let add			= exec("add");
-	let update		= exec("update");
-	let clear		= exec("clear");
-	let swapRows	= exec("swapRows");
-
-	return _ =>
-		h(".jumbotron", [
-			h(".row", [
-				h(".col-md-6", [
-					h("h1", "domvm (keyed)")
+function JumbotronTpl(store) {
+	return (
+		el(".jumbotron", [
+			el(".row", [
+				el(".col-md-6", [
+					el("h1", "domvm (keyed)")
 				]),
-				h(".col-md-6", [
-					h(".row", [
-						h(".col-sm-6.smallpad", [
-							h("button.btn.btn-primary.btn-block#run", {type: "button", onclick: run}, "Create 1,000 rows")
-						]),
-						h(".col-sm-6.smallpad", [
-							h("button.btn.btn-primary.btn-block#runlots", {type: "button", onclick: runLots}, "Create 10,000 rows")
-						]),
-						h(".col-sm-6.smallpad", [
-							h("button.btn.btn-primary.btn-block#add", {type: "button", onclick: add}, "Append 1,000 rows")
-						]),
-						h(".col-sm-6.smallpad", [
-							h("button.btn.btn-primary.btn-block#update", {type: "button", onclick: update}, "Update every 10th row")
-						]),
-						h(".col-sm-6.smallpad", [
-							h("button.btn.btn-primary.btn-block#clear", {type: "button", onclick: clear}, "Clear")
-						]),
-						h(".col-sm-6.smallpad", [
-							h("button.btn.btn-primary.btn-block#swaprows", {type: "button", onclick: swapRows}, "Swap Rows")
-						])
+				el(".col-md-6", [
+					el(".row", [
+						ButtonTpl(store, "run",      "Create 1,000 rows"),
+						ButtonTpl(store, "runLots",  "Create 10,000 rows"),
+						ButtonTpl(store, "add",      "Append 1,000 rows"),
+						ButtonTpl(store, "update",   "Update every 10th row"),
+						ButtonTpl(store, "clear",    "Clear"),
+						ButtonTpl(store, "swapRows", "Swap Rows"),
 					])
 				])
 			])
-		]);
+		])
+	);
 }
 
-function Table(vm) {
-	let select = (e, node) => {
-		while (node.key == null)
-			node = node.parent;
-		store.select(node.key);
-		vm.redraw();
-		return false;
-	};
+function ButtonTpl(store, action, text) {
+	return (
+		el(".col-sm-6.smallpad", [
+			el("button.btn.btn-primary.btn-block#" + action.toLowerCase(), {
+				type: "button",
+				onclick: [store.exec, action],
+			}, text)
+		])
+	);
+}
 
-	let remove = (e, node) => {
-		while (node.key == null)
-			node = node.parent;
-		store.delete(node.key);
-		vm.redraw();
-		return false;
-	};
+function TableTpl(store) {
+	const items = lazyList(store.data, {
+		key:  item => item.id,
+		diff: item => [item.label, item.id === store.selected],
+	});
 
-	// delegated handler
-	let tableClick = {
-		".remove, .remove *": remove,
-		".lbl": select,
-	};
-
-	return _ => {
-		var items = lazyList(store.data, {
-			key:  item => item.id,
-			diff: item => [item.label, item.id === store.selected],
-		});
-
-		return h("table.table.table-hover.table-striped.test-data", {onclick: tableClick}, [
-			h("tbody", {_flags: LAZY_LIST | KEYED_LIST}, items.map(item =>
-				h("tr", {_key: item.id, class: item.id === store.selected ? 'danger' : null}, [
-					h("td.col-md-1", item.id),
-					h("td.col-md-4", [
-						h("a.lbl", item.label)
-					]),
-					h("td.col-md-1", [
-						h("a.remove", [
-							h("span.glyphicon.glyphicon-remove", {"aria-hidden": ""})
-						])
-					]),
-					h("td.col-md-6")
-				])
+	return (
+		el("table.table.table-hover.table-striped.test-data", [
+			el("tbody", {_flags: LAZY_LIST | KEYED_LIST}, items.map(item =>
+				RowTpl(item, store)
 			))
-		]);
-	};
+		])
+	);
+}
+
+function RowTpl(item, store) {
+	return (
+		el("tr", {_key: item.id, class: item.id === store.selected ? 'danger' : null}, [
+			el("td.col-md-1", item.id),
+			el("td.col-md-4", [
+				el("a", {onclick: [store.select, item.id]}, item.label)
+			]),
+			el("td.col-md-1", [
+				el("a", {onclick: [store.delete, item.id]}, [
+					el("span.glyphicon.glyphicon-remove", {"aria-hidden": ""})
+				])
+			]),
+			el("td.col-md-6")
+		])
+	);
 }
